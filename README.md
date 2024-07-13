@@ -50,6 +50,10 @@ On that machine, set up the Conda environment.
 
 Then, add something like this to your crontab to have it run each day at 8 AM.
 
+```
+sudo crontab -e
+```
+
 ```bash
 PATH=/home/jbarrick/.conda/envs/slackapp/bin
 0 8 * * * (cd /home/jbarrick/barricklab_calendar; python barricklab_calendar.py >> /home/jbarrick/barricklab_calendar/logs.log 2>&1)
