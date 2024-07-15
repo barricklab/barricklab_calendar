@@ -7,16 +7,41 @@
 # using these directions: https://developers.google.com/calendar/api/quickstart/python
 # 
 
+
+import argparse
+import sys
+
+parser = argparse.ArgumentParser(description="Read events from Google Calendar API and post on Slack")
+
+# Add the optional positional argument
+parser.add_argument("command", nargs='?', default=None, help="The optional command. Valid choices: daily_events (default), weekly_transfers")
+
+# Parse the arguments
+args = parser.parse_args()
+
+# Access the input path argument
+command = args.command
+
+if not command:
+  command="daily_events"
+  
+
+################################################################################################
+# Part 1: Grab events using the Google Calendar API
+
 from datetime import datetime, timezone, timedelta
 import calendar
 now = datetime.now(timezone.utc).astimezone()
-onedaydelta = timedelta(days=1)
+
+delta = timedelta(days=1)
+if command=="weekly_transfers":
+	delta = timedelta(days=14)
+
+end = now + delta
 
 #print(now.isoformat())
-onedayhence = now + onedaydelta
-#print(onedayhence.isoformat())
+#print(end.isoformat())
 
-import datetime
 from dateutil import parser
 import os.path
 import math
@@ -64,7 +89,7 @@ try:
             maxResults=200,
             singleEvents=True,
             orderBy="startTime",
-            timeMax=onedayhence.isoformat()
+            timeMax=end.isoformat()
         )
         .execute()
     )
@@ -87,10 +112,13 @@ try:
 except HttpError as error:
     print(f"An error occurred: {error}")
 
+#print(events)
 
+if (command=="weekly_transfers"):
+    events = [d for d in events if ('LTEE' in d['summary'].upper()) and ('TRANSFER' in d['summary'].upper())]
 
 ###################################################################################
-# This uses the Slack API to send a message
+# Part 2: Use the Slack API to send a message
 #
 # SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET need to be set in the slack_credentials.json file
 # You must invite the App to that channel
@@ -133,32 +161,64 @@ except SlackApiError as e:
 ################################################################################################
 # Construct the post here from the Google API Event
 
-
 message = ""
-message +=  ":calendar: *Barrick Lab Events for " + calendar.day_name[now.weekday()] + " <!date^" + str(math.floor(now.timestamp())) + "^{date}|" + str(now) + "(US Central Time)>*\n\n"
+if command=="daily_events":
 
-for event in events:
-    #print(event)
-    #print("\n")
+    message +=  ":calendar: *Barrick Lab Events for " + calendar.day_name[now.weekday()] + " <!date^" + str(math.floor(now.timestamp())) + "^{date}|" + str(now) + "(US Central Time)>*\n\n"
+
+    for event in events:
+        #print(event)
+        #print("\n")
 
 
-    if not 'all_day' in event:
-        if 'start_timestamp' in event:
-            message +=  "<!date^" + str(math.floor(event['start_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['start_timestamp'])) + ">"
-        if 'end_timestamp' in event:
-            message +=  "–<!date^" + str(math.floor(event['end_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['end_timestamp'])) + ">"
-        message += "  "
+        if not 'all_day' in event:
+            if 'start_timestamp' in event:
+                message +=  "<!date^" + str(math.floor(event['start_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['start_timestamp'])) + ">"
+            if 'end_timestamp' in event:
+                message +=  "–<!date^" + str(math.floor(event['end_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['end_timestamp'])) + ">"
+            message += "  "
 
-    if 'summary' in event:
-        message += "*" + event["summary"] + "*\n"
-    if 'location' in event:
-        message += "Location: " + event['location'] + "\n"
-    #if 'description' in event:
-    #    message += event['description'] + "\n"
+        if 'summary' in event:
+            message += "*" + event["summary"] + "*\n"
+        if 'location' in event:
+            message += "Location: " + event['location'] + "\n"
+        #if 'description' in event:
+        #    message += event['description'] + "\n"
 
+        message += "\n"
+elif command=="weekly_transfers":
+
+    import pytz
+    import re
+
+    end_of_week = now + timedelta(days=6)
+    message +=  ":ltee-flask: *Upcoming LTEE Transfers for the week of " 
+    message +=  "<!date^" + str(math.floor(now.timestamp())) + "^{date}|" + str(now.date()) + "> to "
+    message +=  "<!date^" + str(math.floor(end_of_week.timestamp())) + "^{date}|" + str(end_of_week.date()) + ">*"
     message += "\n"
 
-app.client.api_call(
-    api_method='chat.postMessage',
-    json={'channel':conversation_id, 'text':message}
-)
+    ## Check whether each day at this time overlaps the events
+    for i in range(0,7):
+        transfer_delta = timedelta(days=i)
+        transfer_date = now + transfer_delta
+        print(transfer_date)
+
+        local_tz = 'US/Central'
+
+        #Find the overlapping event
+        for event in events:
+            event_start = datetime.fromtimestamp(event['start_timestamp']).astimezone(pytz.timezone(local_tz))
+            event_end = datetime.fromtimestamp(event['end_timestamp']).astimezone(pytz.timezone(local_tz))
+            
+            who = event['summary']
+            who = re.sub(r"LTEE\W*transfers*\W*-*\W*", "", who, flags=re.IGNORECASE)
+            if transfer_date >= event_start and transfer_date <= event_end:
+                message += "       " + calendar.day_name[transfer_date.weekday()] + ": " + who + "\n"
+
+    message += ":ltee-flask: *Evolve, LTEE, evolve!*\n"
+
+if message != "":
+    app.client.api_call(
+        api_method='chat.postMessage',
+        json={'channel':conversation_id, 'text':message}
+    )
