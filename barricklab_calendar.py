@@ -10,6 +10,8 @@
 
 import argparse
 import sys
+import pytz
+import re
 
 parser = argparse.ArgumentParser(description="Read events from Google Calendar API and post on Slack")
 
@@ -29,11 +31,13 @@ if not command:
 ################################################################################################
 # Part 1: Grab events using the Google Calendar API
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import calendar
 now = datetime.now(timezone.utc).astimezone()
 
-delta = timedelta(days=1)
+# Default time delta is one min less than 16 hours to not catch events beginning
+# at midnight if we post at 8 AM. Could be made more intelligent.
+delta = timedelta(days=12, hours=15, minutes=59)
 if command=="weekly_transfers":
 	delta = timedelta(days=14)
 
@@ -161,6 +165,18 @@ except SlackApiError as e:
 ################################################################################################
 # Construct the post here from the Google API Event
 
+summary_emojis = [
+    { 'regexp' : r"LTEE\W+transfers", 'emoji' : ":ltee-flask:"},
+    { 'regexp' : r"taco\W+train", 'emoji' : ":bullettrain_side:"},
+    { 'regexp' : r"biotacos", 'emoji' : ":taco:"}
+]
+
+def prefix_emoji(message):
+    for se in summary_emojis:
+        if re.search (se['regexp'], message, flags=re.IGNORECASE):
+            return se['emoji'] + "  "
+    return ""
+
 message = ""
 if command=="daily_events":
 
@@ -170,26 +186,29 @@ if command=="daily_events":
         #print(event)
         #print("\n")
 
-
+        time_part = ""
         if not 'all_day' in event:
             if 'start_timestamp' in event:
-                message +=  "<!date^" + str(math.floor(event['start_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['start_timestamp'])) + ">"
+                time_part +=  "<!date^" + str(math.floor(event['start_timestamp'])) + "^{time}|" + str(date.fromtimestamp(event['start_timestamp'])) + ">"
             if 'end_timestamp' in event:
-                message +=  "–<!date^" + str(math.floor(event['end_timestamp'])) + "^{time}|" + str(datetime.date.fromtimestamp(event['end_timestamp'])) + ">"
-            message += "  "
+                time_part +=  "–<!date^" + str(math.floor(event['end_timestamp'])) + "^{time}|" + str(date.fromtimestamp(event['end_timestamp'])) + ">"
+            time_part += "  "
 
+        emoji_part = ""
+        summary_part = ""
         if 'summary' in event:
-            message += "*" + event["summary"] + "*\n"
+            emoji_part += prefix_emoji(event["summary"])
+            summary_part +=  "*" + event["summary"] + "*" + "  "
+
+        location_part = ""
         if 'location' in event:
-            message += "Location: " + event['location'] + "\n"
+            location_part += "(" + event['location'] + ")"
         #if 'description' in event:
         #    message += event['description'] + "\n"
 
-        message += "\n"
-elif command=="weekly_transfers":
+        message += emoji_part + time_part + summary_part + location_part + "\n\n"
 
-    import pytz
-    import re
+elif command=="weekly_transfers":
 
     end_of_week = now + timedelta(days=6)
     message +=  ":ltee-flask: *Upcoming LTEE Transfers for the week of " 
