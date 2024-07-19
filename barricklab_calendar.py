@@ -37,7 +37,7 @@ now = datetime.now(timezone.utc).astimezone()
 
 # Default time delta is one min less than 16 hours to not catch events beginning
 # at midnight if we post at 8 AM. Could be made more intelligent.
-delta = timedelta(days=12, hours=15, minutes=59)
+delta = timedelta(days=0, hours=15, minutes=59)
 if command=="weekly_transfers":
 	delta = timedelta(days=14)
 
