@@ -13,6 +13,8 @@ import sys
 import pytz
 import re
 
+import json
+
 parser = argparse.ArgumentParser(description="Read events from Google Calendar API and post on Slack")
 
 # Add the optional positional argument
@@ -27,6 +29,14 @@ command = args.command
 if not command:
   command="daily_events"
   
+slack_credentials = {}
+with open('slack.json') as slack_credentials_file:
+  slack_credentials = json.load(slack_credentials_file)
+
+calendar_id = "primary"
+if 'CALENDAR_ID' in slack_credentials:
+    calendar_id = slack_credentials['CALENDAR_ID']
+
 
 ################################################################################################
 # Part 1: Grab events using the Google Calendar API
@@ -88,7 +98,7 @@ try:
     events_result = (
         service.events()
         .list(
-            calendarId="primary",
+            calendarId=calendar_id,
             timeMin=now.isoformat(),
             maxResults=200,
             singleEvents=True,
@@ -132,11 +142,6 @@ import os
 
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
-
-import json
-
-with open('slack.json') as slack_credentials_file:
-  slack_credentials = json.load(slack_credentials_file)
 
 # Initialize your app with your bot token and signing secret
 app = App(
