@@ -33,19 +33,19 @@ Set up a Google App using [https://developers.google.com/calendar/api/quickstart
 ```bash
 conda create -n slackapp python
 conda activate slackapp
-pip -r requirements.txt
+pip install -r requirements.txt
 ```
 
 Now check that it works on your local machine. You must do this to authorize for Google.
 ```bash
 python barricklab_calendar.py
 ```
-After run this once, you should have a local `token.json` file. Youc an copy this to another machine (the server) and it will work.
+After run this once, you should have a local `token.json` file. You can copy this to another machine (the server) and it will work.
 
 ## Server Setup
 
 You need a machine with an internet connection that is on all the time to call this at specified time.
-
+tun
 On that machine, set up the Conda environment.
 
 Then, add something like this to your crontab to have it run each day at 8 AM.

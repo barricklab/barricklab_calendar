@@ -1,4 +1,4 @@
-python-date_util
+python-dateutil
 pytz
 slack_bolt
 google-api-python-client 
